@@ -15,15 +15,17 @@ defined( 'ABSPATH' ) || exit;
 
 define( 'FGR_DUPLICATE_POST_VERSION', '1.0.0' );
 
-// Update-Checker: prüft GitHub-Releases auf neue Versionen
-require_once plugin_dir_path( __FILE__ ) . 'lib/plugin-update-checker/plugin-update-checker.php';
-$fgr_duplicate_post_updater = YahnisElsts\PluginUpdateChecker\v5\PucFactory::buildUpdateChecker(
-    'https://github.com/FreieGestalterischeRepublik/fgr-duplicate-post/',
-    __FILE__,
-    'fgr-duplicate-post'
-);
-$fgr_duplicate_post_updater->setBranch( 'main' );
-$fgr_duplicate_post_updater->getVcsApi()->enableReleaseAssets();
+// Update-Checker: nur registrieren wenn das MU-Plugin den Slug nicht schon belegt hat
+if ( ! apply_filters( 'puc_is_slug_in_use-fgr-duplicate-post', false ) ) {
+    require_once plugin_dir_path( __FILE__ ) . 'lib/plugin-update-checker/plugin-update-checker.php';
+    $fgr_duplicate_post_updater = YahnisElsts\PluginUpdateChecker\v5\PucFactory::buildUpdateChecker(
+        'https://github.com/FreieGestalterischeRepublik/fgr-duplicate-post/',
+        __FILE__,
+        'fgr-duplicate-post'
+    );
+    $fgr_duplicate_post_updater->setBranch( 'main' );
+    $fgr_duplicate_post_updater->getVcsApi()->enableReleaseAssets();
+}
 
 // "Details anzeigen" und "Nach Update suchen" erscheinen in der Pluginliste
 add_filter( 'plugin_row_meta', function ( array $links, string $plugin_file ): array {
