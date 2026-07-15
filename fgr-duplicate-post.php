@@ -2,18 +2,18 @@
 /**
  * Plugin Name:  FGR Duplicate Post
  * Description:  Ein Plugin der Freien Gestalterischen Republik. Dupliziert Posts, Seiten und Custom Post Types mit einem Klick – inklusive aller Meta-Daten, Taxonomien und Page-Builder-Inhalte (WPBakery, Elementor).
- * Version:      1.0.2
+ * Version:      1.0.3
  * Author:       Freie Gestalterische Republik
  * Author URI:   https://fgr.design
  * License:      GPL-2.0-or-later
- * Requires PHP: 8.0
+ * Requires PHP: 7.4
  * Requires at least: 6.0
  * Text Domain:  fgr-duplicate-post
  */
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'FGR_DUPLICATE_POST_VERSION', '1.0.2' );
+define( 'FGR_DUPLICATE_POST_VERSION', '1.0.3' );
 
 // Update-Checker: nur registrieren wenn das MU-Plugin den Slug nicht schon belegt hat
 if ( ! apply_filters( 'puc_is_slug_in_use-fgr-duplicate-post', false ) ) {
@@ -206,7 +206,8 @@ function fgr_dp_execute(): void {
     exit;
 }
 
-function fgr_dp_create( int $post_id ): int|WP_Error {
+/** @return int|WP_Error */
+function fgr_dp_create( int $post_id ) {
     $post = get_post( $post_id );
     if ( ! $post ) {
         return new WP_Error( 'not_found', 'Originalbeitrag nicht gefunden.' );
