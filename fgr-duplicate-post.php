@@ -2,7 +2,7 @@
 /**
  * Plugin Name:  FGR Duplicate Post
  * Description:  Ein Plugin der Freien Gestalterischen Republik. Dupliziert Posts, Seiten und Custom Post Types mit einem Klick – inklusive aller Meta-Daten, Taxonomien und Page-Builder-Inhalte (WPBakery, Elementor).
- * Version:      1.0.3
+ * Version:      1.0.4
  * Author:       Freie Gestalterische Republik
  * Author URI:   https://fgr.design
  * License:      GPL-2.0-or-later
@@ -13,19 +13,16 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'FGR_DUPLICATE_POST_VERSION', '1.0.3' );
+define( 'FGR_DUPLICATE_POST_VERSION', '1.0.4' );
 
-// Update-Checker: nur registrieren wenn das MU-Plugin den Slug nicht schon belegt hat
-if ( ! apply_filters( 'puc_is_slug_in_use-fgr-duplicate-post', false ) ) {
-    require_once plugin_dir_path( __FILE__ ) . 'lib/plugin-update-checker/plugin-update-checker.php';
-    $fgr_duplicate_post_updater = YahnisElsts\PluginUpdateChecker\v5\PucFactory::buildUpdateChecker(
-        'https://github.com/FreieGestalterischeRepublik/fgr-duplicate-post/',
-        __FILE__,
-        'fgr-duplicate-post'
-    );
-    $fgr_duplicate_post_updater->setBranch( 'main' );
-    $fgr_duplicate_post_updater->getVcsApi()->enableReleaseAssets();
-}
+require_once plugin_dir_path( __FILE__ ) . 'lib/plugin-update-checker/plugin-update-checker.php';
+$fgr_duplicate_post_updater = YahnisElsts\PluginUpdateChecker\v5\PucFactory::buildUpdateChecker(
+    'https://github.com/FreieGestalterischeRepublik/fgr-duplicate-post/',
+    __FILE__,
+    'fgr-duplicate-post'
+);
+$fgr_duplicate_post_updater->setBranch( 'main' );
+$fgr_duplicate_post_updater->getVcsApi()->enableReleaseAssets();
 
 // "Details anzeigen" und "Nach Update suchen" erscheinen in der Pluginliste
 add_filter( 'plugin_row_meta', function ( array $links, string $plugin_file ): array {
