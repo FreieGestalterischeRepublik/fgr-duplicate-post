@@ -2,7 +2,7 @@
 /**
  * Plugin Name:  FGR Duplicate Post
  * Description:  Ein Plugin der Freien Gestalterischen Republik. Dupliziert Posts, Seiten und Custom Post Types mit einem Klick – inklusive aller Meta-Daten, Taxonomien und Page-Builder-Inhalte (WPBakery, Elementor).
- * Version:      1.0.4
+ * Version:      1.0.5
  * Author:       Freie Gestalterische Republik
  * Author URI:   https://fgr.design
  * License:      GPL-2.0-or-later
@@ -13,7 +13,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'FGR_DUPLICATE_POST_VERSION', '1.0.4' );
+define( 'FGR_DUPLICATE_POST_VERSION', '1.0.5' );
 
 require_once plugin_dir_path( __FILE__ ) . 'lib/plugin-update-checker/plugin-update-checker.php';
 $fgr_duplicate_post_updater = YahnisElsts\PluginUpdateChecker\v5\PucFactory::buildUpdateChecker(
@@ -53,7 +53,21 @@ add_filter( 'plugin_row_meta', function ( array $links, string $plugin_file ): a
 
 if ( ! function_exists( 'fgr_mu_sync' ) ) {
     function fgr_mu_sync(): void {
-        $url      = 'https://raw.githubusercontent.com/FreieGestalterischeRepublik/fgr-plugin-overview/main/fgr-plugin-overview.php';
+        // An den jeweils aktuellen GitHub-Release gepinnt statt an den beweglichen main-Branch:
+        // ein Release ist ein bewusster, protokollierter Veröffentlichungsschritt, kein einzelner Push.
+        $release = wp_remote_get(
+            'https://api.github.com/repos/FreieGestalterischeRepublik/fgr-plugin-overview/releases/latest',
+            [
+                'timeout'    => 10,
+                'user-agent' => 'WordPress/' . get_bloginfo( 'version' ) . '; ' . home_url(),
+            ]
+        );
+        if ( is_wp_error( $release ) || 200 !== wp_remote_retrieve_response_code( $release ) ) return;
+        $release_data = json_decode( wp_remote_retrieve_body( $release ), true );
+        $tag          = (string) ( $release_data['tag_name'] ?? '' );
+        if ( '' === $tag || ! preg_match( '/^v?[\d.]+$/', $tag ) ) return;
+
+        $url      = 'https://raw.githubusercontent.com/FreieGestalterischeRepublik/fgr-plugin-overview/' . rawurlencode( $tag ) . '/fgr-plugin-overview.php';
         $dest_dir = WPMU_PLUGIN_DIR;
         $dest     = $dest_dir . '/fgr-plugin-overview.php';
 
@@ -139,21 +153,26 @@ add_action( 'plugins_loaded', function () {
 add_filter( 'post_row_actions', 'fgr_dp_row_link', 10, 2 );
 add_filter( 'page_row_actions', 'fgr_dp_row_link', 10, 2 );
 
-function fgr_dp_row_link( array $actions, WP_Post $post ): array {
+/** Post-Type darf nicht dupliziert werden (fest oder vom Admin ausgeschlossen)? */
+function fgr_dp_is_excluded_type( string $post_type ): bool {
     // Interne WordPress-Post-Types ausschließen
     $always_excluded = [
         'acf-field-group', 'acf-field', 'oembed_cache',
         'wp_block', 'wp_template', 'wp_template_part',
         'wp_navigation', 'wp_global_styles', 'revision',
     ];
-    if ( in_array( $post->post_type, $always_excluded, true ) ) {
-        return $actions;
+    if ( in_array( $post_type, $always_excluded, true ) ) {
+        return true;
     }
 
     // Benutzer-konfigurierte Ausnahmen
     $opts     = get_option( 'fgr_duplicate_post', [] );
     $excluded = $opts['excluded_types'] ?? [];
-    if ( in_array( $post->post_type, $excluded, true ) ) {
+    return in_array( $post_type, $excluded, true );
+}
+
+function fgr_dp_row_link( array $actions, WP_Post $post ): array {
+    if ( fgr_dp_is_excluded_type( $post->post_type ) ) {
         return $actions;
     }
 
@@ -182,6 +201,11 @@ function fgr_dp_execute(): void {
 
     if ( ! current_user_can( 'edit_post', $post_id ) ) {
         wp_die( 'Keine Berechtigung.' );
+    }
+
+    $post = get_post( $post_id );
+    if ( ! $post || fgr_dp_is_excluded_type( $post->post_type ) ) {
+        wp_die( 'Dieser Inhaltstyp ist von der Duplizieren-Funktion ausgeschlossen.' );
     }
 
     $new_id = fgr_dp_create( $post_id );
