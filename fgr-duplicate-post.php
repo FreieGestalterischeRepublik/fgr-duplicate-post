@@ -2,7 +2,7 @@
 /**
  * Plugin Name:  FGR Duplicate Post
  * Description:  Ein Plugin der Freien Gestalterischen Republik. Dupliziert Posts, Seiten und Custom Post Types mit einem Klick – inklusive aller Meta-Daten, Taxonomien und Page-Builder-Inhalte (WPBakery, Elementor).
- * Version:      1.0.5
+ * Version:      1.0.6
  * Author:       Freie Gestalterische Republik
  * Author URI:   https://fgr.design
  * License:      GPL-2.0-or-later
@@ -13,16 +13,23 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'FGR_DUPLICATE_POST_VERSION', '1.0.5' );
+define( 'FGR_DUPLICATE_POST_VERSION', '1.0.6' );
 
 require_once plugin_dir_path( __FILE__ ) . 'lib/plugin-update-checker/plugin-update-checker.php';
 $fgr_duplicate_post_updater = YahnisElsts\PluginUpdateChecker\v5\PucFactory::buildUpdateChecker(
-    'https://github.com/FreieGestalterischeRepublik/fgr-duplicate-post/',
+    'https://fgr-plugins-api.fgr.design/fgr-duplicate-post.json',
     __FILE__,
     'fgr-duplicate-post'
 );
-$fgr_duplicate_post_updater->setBranch( 'main' );
-$fgr_duplicate_post_updater->getVcsApi()->enableReleaseAssets();
+
+// Auto-Update: WordPress' täglicher Update-Cron installiert neue Versionen
+// dieses Plugins automatisch, kein manueller Klick auf jeder Seite nötig.
+add_filter( 'auto_update_plugin', function ( $update, $item ) {
+    if ( isset( $item->slug ) && $item->slug === 'fgr-duplicate-post' ) {
+        return true;
+    }
+    return $update;
+}, 10, 2 );
 
 // "Details anzeigen" und "Nach Update suchen" erscheinen in der Pluginliste
 add_filter( 'plugin_row_meta', function ( array $links, string $plugin_file ): array {
