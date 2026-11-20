@@ -31,6 +31,19 @@ Die Einstellungen sind im WordPress-Backend unter **FGR Plugins → Duplicate Po
 | Titel-Suffix | Text der an den Duplikat-Titel angehängt wird (z. B. „(Kopie)") |
 | Ausgeschlossene Post-Types | Post-Types ohne Duplizieren-Button |
 
+## WooCommerce-Produkte
+
+Produkte werden über die WooCommerce-eigene Kopierfunktion dupliziert. Dabei gilt:
+
+- **Neue Artikelnummer (SKU):** WooCommerce hängt eine laufende Nummer an (z. B. `ABC` → `ABC-1`).
+- **Verkaufszahl und Bewertungen** werden auf 0 gesetzt.
+- **Lagerbestand** wird auf 0 gesetzt (bei aktivierter Lagerverwaltung), damit keine Restbestände des Originals übernommen werden.
+- **Varianten** werden mitkopiert (mit neuer SKU und Lagerbestand 0).
+- **Nicht übernommen** werden: FooEvents-Ticketzähler (`_WooCommerceEventsCounter`), Google-for-WooCommerce-Verknüpfung (`_wc_gla_*`), Lagerwarnungs-Status der WooCommerce-App (`_wc_push_notification_*`). Weitere Schlüssel lassen sich über den Filter `fgr_duplicate_post_product_meta_excluded` ausschließen.
+- **Bestellungen und FooEvents-Tickets** gehören nicht zum Produkt und werden nie kopiert. Die Kopie startet mit einer leeren Teilnehmerliste.
+
+Titel-Suffix und Status des Duplikats kommen wie bei allen Inhalten aus den Plugin-Einstellungen.
+
 ## Versionierung
 
 `MAJOR.MINOR.PATCH`

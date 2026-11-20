@@ -2,7 +2,7 @@
 /**
  * Plugin Name:  FGR Duplicate Post
  * Description:  Ein Plugin der Freien Gestalterischen Republik. Dupliziert Posts, Seiten und Custom Post Types mit einem Klick – inklusive aller Meta-Daten, Taxonomien und Page-Builder-Inhalte (WPBakery, Elementor).
- * Version:      1.0.6
+ * Version:      1.1.0
  * Author:       Freie Gestalterische Republik
  * Author URI:   https://fgr.design
  * License:      GPL-2.0-or-later
@@ -13,7 +13,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'FGR_DUPLICATE_POST_VERSION', '1.0.6' );
+define( 'FGR_DUPLICATE_POST_VERSION', '1.1.0' );
 
 require_once plugin_dir_path( __FILE__ ) . 'lib/plugin-update-checker/plugin-update-checker.php';
 $fgr_duplicate_post_updater = YahnisElsts\PluginUpdateChecker\v5\PucFactory::buildUpdateChecker(
@@ -250,6 +250,11 @@ function fgr_dp_create( int $post_id ) {
         $status = $post->post_status;
     }
 
+    // WooCommerce-Produkte über die WooCommerce-eigene Kopierfunktion duplizieren
+    if ( 'product' === $post->post_type && function_exists( 'wc_get_product' ) ) {
+        return fgr_dp_create_product( $post, $post->post_title . $suffix, $status );
+    }
+
     $args = [
         'post_author'    => $post->post_author,
         'post_content'   => $post->post_content,
@@ -294,6 +299,123 @@ function fgr_dp_create( int $post_id ) {
     }
 
     // Elementor: CSS für den neuen Post neu generieren
+    if ( class_exists( '\Elementor\Core\Files\CSS\Post' ) ) {
+        $css = \Elementor\Core\Files\CSS\Post::create( $new_id );
+        $css->update();
+    }
+
+    return $new_id;
+}
+
+// ── WooCommerce-Produkte ──────────────────────────────────────────────────────
+
+/**
+ * Meta-Schlüssel, die beim Kopieren eines Produkts nicht übernommen werden.
+ * Sie gehören zum Original (Zähler, Sync-Status externer Dienste) und würden
+ * in der Kopie falsche Werte oder Verknüpfungen erzeugen.
+ */
+function fgr_dp_product_meta_excluded( string $key ): bool {
+    $exact = [
+        '_WooCommerceEventsCounter', // FooEvents: fortlaufende Ticketnummer des Events
+        '_edit_lock',
+        '_edit_last',
+    ];
+    if ( in_array( $key, $exact, true ) ) {
+        return true;
+    }
+
+    $prefixes = [
+        '_wc_gla_',               // Google for WooCommerce: Verknüpfung zum Google-Produkt
+        '_wc_push_notification_', // WooCommerce-App: Lagerwarnungen bereits gesendet
+    ];
+    foreach ( $prefixes as $prefix ) {
+        if ( 0 === strpos( $key, $prefix ) ) {
+            return true;
+        }
+    }
+
+    return (bool) apply_filters( 'fgr_duplicate_post_product_meta_excluded', false, $key );
+}
+
+/**
+ * Bereinigt ein Produkt (oder eine Variante) vor dem Speichern der Kopie:
+ * Lagerbestand auf 0, ausgeschlossene Meta-Daten entfernen.
+ */
+function fgr_dp_clean_product_copy( WC_Product $copy ): void {
+    if ( $copy->get_manage_stock( 'edit' ) ) {
+        $copy->set_stock_quantity( 0 );
+    }
+    foreach ( $copy->get_meta_data() as $meta ) {
+        if ( fgr_dp_product_meta_excluded( (string) $meta->key ) ) {
+            $copy->delete_meta_data( $meta->key );
+        }
+    }
+}
+
+/**
+ * Dupliziert ein WooCommerce-Produkt mit der WooCommerce-eigenen Funktion.
+ * Diese vergibt eine neue Artikelnummer (SKU), setzt Verkaufszahl und Bewertungen
+ * zurück und kopiert auch die Varianten. Bestellungen und Tickets (FooEvents)
+ * hängen nicht am Produkt-Datensatz und werden nicht kopiert.
+ *
+ * @return int|WP_Error
+ */
+function fgr_dp_create_product( WP_Post $post, string $title, string $status ) {
+    $product = wc_get_product( $post->ID );
+    if ( ! $product ) {
+        return new WP_Error( 'not_found', 'Produkt nicht gefunden.' );
+    }
+
+    if ( ! class_exists( 'WC_Admin_Duplicate_Product' ) && defined( 'WC_ABSPATH' ) ) {
+        $file = WC_ABSPATH . 'includes/admin/class-wc-admin-duplicate-product.php';
+        if ( file_exists( $file ) ) {
+            include_once $file;
+        }
+    }
+    if ( ! class_exists( 'WC_Admin_Duplicate_Product' ) ) {
+        return new WP_Error( 'wc_missing', 'Die WooCommerce-Kopierfunktion ist nicht verfügbar.' );
+    }
+
+    $before_save = function ( $copy, $original ) use ( $post, $title, $status ) {
+        if ( ! $copy instanceof WC_Product ) {
+            return;
+        }
+        fgr_dp_clean_product_copy( $copy );
+        // Nur das Hauptprodukt bekommt Titel und Status aus den Plugin-Einstellungen
+        if ( $original instanceof WC_Product && $original->get_id() === $post->ID ) {
+            $copy->set_name( $title );
+            $copy->set_status( $status );
+        }
+    };
+
+    add_action( 'woocommerce_product_duplicate_before_save', $before_save, 10, 2 );
+    try {
+        $duplicator = new WC_Admin_Duplicate_Product();
+        $copy       = $duplicator->product_duplicate( $product );
+    } catch ( Throwable $e ) {
+        return new WP_Error( 'wc_duplicate_failed', $e->getMessage() );
+    } finally {
+        remove_action( 'woocommerce_product_duplicate_before_save', $before_save, 10 );
+    }
+
+    if ( ! $copy instanceof WC_Product || ! $copy->get_id() ) {
+        return new WP_Error( 'wc_duplicate_failed', 'Das Produkt konnte nicht kopiert werden.' );
+    }
+    $new_id = $copy->get_id();
+
+    // Weitere Taxonomien (z. B. Marken, eigene Taxonomien) übernehmen, die WooCommerce nicht selbst kopiert
+    $skip = [ 'product_type', 'product_visibility', 'product_shipping_class', 'product_cat', 'product_tag' ];
+    foreach ( get_object_taxonomies( 'product' ) as $taxonomy ) {
+        if ( in_array( $taxonomy, $skip, true ) || 0 === strpos( $taxonomy, 'pa_' ) ) {
+            continue;
+        }
+        $terms = wp_get_object_terms( $post->ID, $taxonomy, [ 'fields' => 'slugs' ] );
+        if ( ! is_wp_error( $terms ) && ! empty( $terms ) ) {
+            wp_set_object_terms( $new_id, $terms, $taxonomy );
+        }
+    }
+
+    // Elementor: CSS für das neue Produkt neu generieren
     if ( class_exists( '\Elementor\Core\Files\CSS\Post' ) ) {
         $css = \Elementor\Core\Files\CSS\Post::create( $new_id );
         $css->update();
